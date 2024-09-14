@@ -139,7 +139,7 @@ WavingBothHands
 **Project Presented By**: [Neonfire Studio](https://neonfire-studio.itch.io)  
 **Project Developed By**: Sandipan Saha  
 **3D Models Created By**: Brandon A. Silva  
-**Godot Plush Model By**: [FR3NKD](https://fr3nkd.gumroad.com/l/vhfvy)
+**Godot Plush Model By**: [FR3NKD](https://fr3nkd.gumroad.com/l/vhfvy)  
 **Animations From**: [Mixamo](https://www.mixamo.com)  
 **Grid Textures & Sounds From**: [Kenney](https://kenney.nl)
 
