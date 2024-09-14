@@ -6,6 +6,87 @@ If you find this Advanced Third-Person Controller useful, consider supporting my
 
 [Take a look at the development plan for it.](https://unknow.com)
 
+## How to Use
+
+1. Install this repository.
+2. Drag and drop the **Player** folder into your project.
+3. Add the following input maps:
+    ```plaintext
+    left -> A
+    right -> D
+    forward -> W
+    backward -> S
+    jump -> Space
+    sprint -> Shift
+    crouch -> CTRL
+    roll -> Shift + C
+    slide -> Shift + V
+    interact -> F
+    emote_1 -> 1
+    emote_2 -> 2
+    emote_3 -> 3
+    emote_4 -> 4
+    right_mouse -> Right Mouse Button
+    scroll_up -> Mouse Wheel Up
+    scroll_Dowm -> Mouse Wheel Down
+    fullscreen -> F11
+    ```
+4. Run and test your game, it is ready!
+
+## Why It Is Advanced?
+
+The **Advanced Third-Person Controller** stands out due to its range of advanced features, including:
+
+- **Basic Movement**  
+- **Multiplayer Support**  
+- **Locomotion and Strafing**  
+- **Advanced Animation System with Emotes**  
+- **Dynamic Footsteps Based on Material**  
+- **Highly Customizable Controller**  
+
+Its future versions will be even better, with more advanced features and optimizations.
+
+## How to Replace the Default Character
+
+### Requirements
+
+Your custom models must contain the following animations:
+```plaintext
+Idle
+Walking
+Running
+Jumping
+FallingIdle
+CrouchIdle
+CrouchWalking
+Rolling
+Sliding
+Lifting
+RunToStop
+JogLeft
+JogRight
+JogForward
+JogBackward
+JogBackLeft
+JogBackRight
+JogForwardLeft
+JogForwardRight
+HeadYes
+HeadNo
+Waving
+WavingBothHands
+```
+### Important Notes!
+- Every animation must be in place.
+### Steps
+
+1. Add your character model to the project and make it local.
+2. Adjust the size and position of your model as per the default character.
+3. Set the `anim_player` of the **AnimationTree** node to your model's animation player.
+4. In the **Skeleton3D** node of your model, add a **BoneAttachment3D** and name it "HandPalm".
+5. Set the **hand_palm** export variable to reference this "HandPalm" node.
+6. Test your character; it should now be fully integrated and ready for use.
+
 ## Current Features (v1.0):
 
 - Basic Movement
@@ -26,10 +107,10 @@ If you find this Advanced Third-Person Controller useful, consider supporting my
 
 ## Known Issues
 
-- Footstep sound may not work in Multiplayer Mode
-- Picking up object may not work in Multiplayer Mode
-- There is a small hole in the foot of Godot robo character  
-...I will try to fix it in the future version.
+- Footstep sound may not work in Multiplayer Mode.
+- Picking up object may not work in Multiplayer Mode.
+- There is a small hole in the foot of Godot Robo character.  
+...I will try to fix it in future versions.
 
 ## Controls
 
@@ -44,6 +125,13 @@ If you find this Advanced Third-Person Controller useful, consider supporting my
 - **Emotes** | 1-4
 - **Zoom In/Out** | Scroll Up/Down
 - **Toggle Fullscreen** | F11
+
+## Screenshots
+
+*Add some relevant screenshots of the project here*
+
+![Screenshot 1](link_to_screenshot_1)
+![Screenshot 2](link_to_screenshot_2)
 
 ## Credits
 
