@@ -31,7 +31,8 @@ If you find this Advanced Third-Person Controller useful, consider supporting my
     scroll_Dowm -> Mouse Wheel Down
     fullscreen -> F11
     ```
-4. Run and test your game, it is ready!
+4. Add the player to your scene
+5. Run and test your game, it is ready!
 
 ## Why It Is Advanced?
 
