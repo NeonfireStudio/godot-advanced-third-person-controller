@@ -4,7 +4,7 @@ Thank you for downloading this **Advanced Third-Person Controller**! This contro
 
 If you find this Advanced Third-Person Controller useful, consider supporting my work by [buying me a coffee](https://buymeacoffee.com/KingGD). If you don't have an account there, you can also support me through [Ko-fi](https://ko-fi.com/neonfirestudio) or [Itch.io](https://neonfire-studio.itch.io/godot-advanced-third-person-controller). Your support is greatly appreciated and helps me continue to improve and add more features!
 
-[Take a look at the development plan for it.](https://unknow.com)
+[Take a look at the development plan for it.]([https://unknow.com](https://github.com/NeonfireStudio/godot-advanced-third-person-controller/blob/main/FuturePlan.md)
 
 ## How to Use
 
