@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3 uid="uid://b3d47h5qbcm6x"]
+
+[ext_resource type="Script" path="res://Objects/PickableObject.gd" id="1_25lmi"]
+[ext_resource type="PackedScene" uid="uid://cbb71bguidmrp" path="res://Assets/Models/godot_plush V2.glb" id="2_7cbol"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_yx07h"]
+radius = 0.1
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_72mwi"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
+[node name="GodotPlush" type="StaticBody3D" node_paths=PackedStringArray("collision_shape") groups=["Pickable"]]
+script = ExtResource("1_25lmi")
+collision_shape = NodePath("CollisionShape3D")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, 0, 0, 0)
+shape = SubResource("SphereShape3D_yx07h")
+
+[node name="Model" parent="." instance=ExtResource("2_7cbol")]
+transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, 0, -0.0825019, 0)
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_72mwi")

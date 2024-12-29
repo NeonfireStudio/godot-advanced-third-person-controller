@@ -1,0 +1,913 @@
+[gd_scene load_steps=45 format=3 uid="uid://dhsjvrwo5ykao"]
+
+[ext_resource type="Script" path="res://World/world.gd" id="1_0e1xw"]
+[ext_resource type="PackedScene" uid="uid://b3d47h5qbcm6x" path="res://Objects/godot_plush.tscn" id="2_udnsw"]
+[ext_resource type="PackedScene" uid="uid://cgf0qd1yaus56" path="res://Player/player.tscn" id="3_sjtkm"]
+[ext_resource type="Texture2D" uid="uid://bmut036d482ur" path="res://Assets/Textures/texture_01.png" id="4_yqc5a"]
+[ext_resource type="Texture2D" uid="uid://bn5k4y2u25gi8" path="res://Assets/Textures/texture_08.png" id="5_72ipk"]
+[ext_resource type="Texture2D" uid="uid://w4tygefgvw5i" path="res://Assets/Textures/texture_04.png" id="6_idp21"]
+[ext_resource type="Texture2D" uid="uid://drsojq0nsg1lq" path="res://Assets/Textures/texture_02_orange.png" id="7_0bl3a"]
+[ext_resource type="Texture2D" uid="uid://bgdstkk58dc26" path="res://Assets/Textures/texture_02.png" id="7_nlouq"]
+[ext_resource type="Texture2D" uid="uid://c1b4cejmbcafh" path="res://Assets/Textures/texture_05.png" id="8_ss6vt"]
+[ext_resource type="Texture2D" uid="uid://bxfrka62ialbj" path="res://Assets/Textures/texture_09.png" id="9_vvk7m"]
+[ext_resource type="PackedScene" uid="uid://bkt1dm1phknrl" path="res://Enemies/enemy.tscn" id="10_2tw5l"]
+
+[sub_resource type="Shader" id="Shader_4dent"]
+code = "shader_type sky;
+render_mode use_half_res_pass;
+
+group_uniforms clouds;
+
+uniform sampler2D cloud_shape_sampler : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D cloud_noise_sampler : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D cloud_curves;
+
+uniform int clouds_samples : hint_range(8, 32, 8) = 16;
+uniform int shadow_sample : hint_range(1, 4, 1) = 4;
+
+uniform float clouds_density : hint_range(0.0, 1.0, 0.1) = 0.5;
+uniform float clouds_scale : hint_range(0.5, 1.5, 0.1) = 1.0;
+uniform float clouds_smoothness : hint_range(0.01, 0.1, 0.01) = 0.035;
+uniform vec3 clouds_light_color : source_color;
+uniform float clouds_shadow_intensity : hint_range(0.1, 10.0, 0.1) = 1.0;
+
+group_uniforms high_clouds;
+
+uniform sampler2D high_clouds_sampler;
+uniform float high_clouds_density : hint_range(0.0, 1.0, 0.05) = 0.0;
+
+group_uniforms sky;
+
+uniform vec3 top_color : source_color = vec3(1.0);
+uniform vec3 bottom_color : source_color = vec3(1.0);
+uniform vec3 sun_scatter : source_color = vec3(1.0);
+
+group_uniforms astro;
+
+uniform vec3 astro_tint : source_color;
+uniform sampler2D astro_sampler : repeat_disable, filter_linear_mipmap;
+uniform float astro_scale : hint_range(0.1, 10.0, 0.1) = 1.0;
+uniform float astro_intensity : hint_range(1.0, 3.0, 0.1) = 1.0;
+
+group_uniforms stars;
+
+uniform float stars_intensity : hint_range(0.0, 5.0, 0.1) = 0.0;
+
+group_uniforms shooting_stars;
+
+uniform float shooting_stars_intensity : hint_range(0.0, 10.0, 0.1) = 0.0;
+uniform sampler2D shooting_star_sampler : filter_linear, repeat_disable;
+uniform vec3 shooting_star_tint : source_color;
+
+float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+// Voronoi method credit:
+// The MIT License
+// Copyright © 2013 Inigo Quilez
+// https://www.shadertoy.com/view/ldl3Dl
+
+vec3 hash( vec3 x ){
+	x = vec3( dot(x,vec3(127.1,311.7, 74.7)),
+			  dot(x,vec3(269.5,183.3,246.1)),
+			  dot(x,vec3(113.5,271.9,124.6)));
+	return fract(sin(x)*43758.5453123);
+}
+
+vec3 voronoi( in vec3 x ){
+	vec3 p = floor( x );
+	vec3 f = fract( x );
+	
+	float id = 0.0;
+	vec2 res = vec2( 100.0 );
+	for( int k=-1; k<=1; k++ )
+	for( int j=-1; j<=1; j++ )
+	for( int i=-1; i<=1; i++ ) {
+		vec3 b = vec3( float(i), float(j), float(k) );
+		vec3 r = vec3( b ) - f + hash( p + b );
+		float d = dot( r, r );
+		if( d < res.x ) {
+			id = dot( p+b, vec3(1.0,57.0,113.0 ) );
+			res = vec2( d, res.x );
+		} else if( d < res.y ) {
+			res.y = d;
+		}
+    }
+    return vec3( sqrt( res ), abs(id) );
+}
+
+// https://stackoverflow.com/questions/18558910/direction-vector-to-rotation-matrix
+
+mat3 direction_to_matrix(vec3 direction) {
+	vec3 x_axis = normalize(cross(vec3(0.0, 1.0, 0.0), direction));
+	vec3 y_axis = normalize(cross(direction, x_axis));
+	return mat3(vec3(x_axis.x, y_axis.x, direction.x),
+				vec3(x_axis.y, y_axis.y, direction.y),
+				vec3(x_axis.z, y_axis.z, direction.z));
+}
+
+float cloud_density(vec3 p, float progress){
+	float t_o = TIME * 0.001;
+	float t_o_small = TIME * -0.005;
+	float noise = texture(cloud_noise_sampler, p.xy * 4.0 + t_o_small).x * 0.1 + 0.9;
+	float clouds_shape = texture(cloud_shape_sampler, (p.xy + t_o) * clouds_scale).x;
+	float height_curve = texture(cloud_curves, vec2(progress, 0.0)).x;
+	float base_density = 1.0 - clouds_density;
+	float density = 
+	smoothstep(base_density - clouds_smoothness,
+	base_density + clouds_smoothness,
+	clouds_shape * noise * height_curve
+	);
+	return density;
+}
+
+vec2 cloud_ray_march(vec3 direction, vec3 sun_direction){
+	
+	float density = 0.0;
+	float light = 0.0;
+	
+	float height = 0.03;
+	vec3 sample_point = vec3(0.0, 0.0, 2.0);
+	
+	int loop_offset = clouds_samples * 3;
+	
+	for(int i = loop_offset; i < clouds_samples + loop_offset; i++) {
+		float progress = float(i) / float(clouds_samples);
+		sample_point = direction * height * progress;
+		float point_density = cloud_density(sample_point, progress);
+		density += point_density;
+		
+		float point_light = 0.0;
+		for(int f = 0; f < shadow_sample; f++){
+			float shadow_progress = float(f) / float(shadow_sample);
+			vec3 shadow_offset = sun_direction * height * shadow_progress;
+			point_light += cloud_density(sample_point + shadow_offset, progress);
+		}
+		light += point_light;
+	}
+	return vec2(density, light / float(shadow_sample * clouds_samples));
+}
+
+vec3 random_direction(float seed){
+	float phi = rand(seed) * PI;
+	float costheta = rand(seed + 100.0) * 2.0 - 1.0;
+	float theta = acos(costheta);
+	return vec3( sin(theta) * cos(phi), (theta) * sin(phi), cos(theta) );
+}
+
+float get_shooting_star(vec3 eyedir){
+	float shooting_star = 0.0;
+	for(int i = 0; i < 4; i++){
+		float base_rand = rand(float(i));
+		float time = TIME + base_rand * 2.0;
+		float duration = 0.5 + base_rand;
+		float seed = floor(time / duration) * duration + base_rand;
+		float progress = mod(time, duration) / duration;
+		float rand_value = rand(seed + 100.0);
+		float rand_scale = base_rand * 10.0;
+		float a = rand_value * 0.8;
+		mat3 angle = mat3(vec3(cos(a), -sin(a), 0.0), vec3(sin(a), cos(a), 0.0), vec3(0.0, 0.0, 1.0));
+		vec3 shooting_dir = direction_to_matrix(random_direction(seed)) * angle * eyedir;
+		vec2 shooting_uv = ((shooting_dir.xy + vec2(0.0, progress * 0.4)) * (8.0 + rand_scale)) + vec2(0.5);
+
+		float shooting_mask = ceil(
+			clamp(shooting_uv.x * (1.0 - shooting_uv.x), 0.0, 1.0) *
+			clamp(shooting_uv.y * (1.0 - shooting_uv.y), 0.0, 1.0)
+			) * ceil(shooting_dir.z);
+			
+		shooting_star = clamp(
+			shooting_star + texture(shooting_star_sampler, shooting_uv).x
+			* sin(progress * PI)
+			* shooting_mask * rand_value,
+		0.0, 1.0);
+	}
+	return clamp(shooting_star, 0.0, 1.0);
+}
+
+void sky() {
+	
+	float horizon_mask = abs(EYEDIR.y);
+	float bottom_mask = smoothstep(0.5, 0.45, SKY_COORDS.y);
+	
+	vec3 dir = direction_to_matrix(LIGHT0_DIRECTION) * EYEDIR;
+	vec2 astro_uv = (-(dir.xy / dir.z) * astro_scale) + vec2(0.5);
+	float astro_mask = ceil(
+		clamp(astro_uv.x * (1.0 - astro_uv.x), 0.0, 1.0) *
+		clamp(astro_uv.y * (1.0 - astro_uv.y), 0.0, 1.0)
+		) * ceil(dir.z);
+	vec4 astro_color = texture(astro_sampler, astro_uv);
+	
+	// Sky color
+	
+	vec3 sky_gradient = mix(bottom_color.rgb, top_color.rgb, clamp(EYEDIR.y, 0.0, 1.0));
+	vec3 sunset_color = sun_scatter * (1.0 - horizon_mask);
+	vec3 sky_color = clamp(sky_gradient + sunset_color, 0.0, 1.0);
+	
+	// Stars
+	
+	if(stars_intensity > 0.0){
+		vec2 stars = voronoi(EYEDIR * 25.0).xz;
+		sky_color += smoothstep(0.025 + ((1.0 + sin(TIME + stars.y)) / 2.0) * 0.05, 0.0, stars.x) * stars_intensity;
+	}
+	
+	// Add shooting stars
+	
+	if(shooting_stars_intensity > 0.0){
+		sky_color += get_shooting_star(EYEDIR) * shooting_stars_intensity * shooting_star_tint;
+	}
+	
+	// Add astro
+	
+	sky_color = mix(sky_color, astro_color.rgb * astro_intensity * astro_tint, astro_color.a * astro_mask * bottom_mask);
+	
+	// Add high clouds
+	
+	if(high_clouds_density > 0.0){
+		vec2 high_clouds_uv = (EYEDIR.xz / clamp(EYEDIR.y, 0.0, 1.0)) * 0.25 + TIME * 0.001;
+		float high_clouds_mask = texture(high_clouds_sampler, high_clouds_uv).x;
+		sky_color = mix(sky_color, clouds_light_color, smoothstep(0.0, 1.0, high_clouds_mask) * horizon_mask * bottom_mask * high_clouds_density);
+	}
+	
+	// clouds
+	if (AT_HALF_RES_PASS) {
+		vec3 clouds_direction = vec3(EYEDIR.xz / clamp(EYEDIR.y, 0.0, 1.0), 1.0);
+		vec2 clouds = EYEDIR.y > 0.0 ? cloud_ray_march(clouds_direction, LIGHT0_DIRECTION) : vec2(0.0);
+		
+		COLOR = mix(bottom_color, clouds_light_color, exp(-clouds.y * clouds_shadow_intensity));
+		ALPHA = (1.0 - exp(-clouds.x * horizon_mask * bottom_mask * 10.0));
+		
+	}else{
+		COLOR.rgb = mix(sky_color, HALF_RES_COLOR.rgb, HALF_RES_COLOR.a);
+	}
+}
+"
+
+[sub_resource type="Gradient" id="Gradient_4hq80"]
+offsets = PackedFloat32Array(0.283019, 0.632075)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_p4glc"]
+gradient = SubResource("Gradient_4hq80")
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+
+[sub_resource type="Curve" id="Curve_olefp"]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(1e-05, 1), 0.0, 0.0, 0, 0, Vector2(1, 0.835165), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_f30df"]
+curve = SubResource("Curve_olefp")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_y0ijw"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_4m1bu"]
+seamless = true
+noise = SubResource("FastNoiseLite_y0ijw")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ed75x"]
+shader = SubResource("Shader_4dent")
+shader_parameter/clouds_samples = 32
+shader_parameter/shadow_sample = 4
+shader_parameter/clouds_density = 0.4
+shader_parameter/clouds_scale = 0.7
+shader_parameter/clouds_smoothness = 0.03
+shader_parameter/clouds_light_color = Color(1, 1, 1, 1)
+shader_parameter/clouds_shadow_intensity = 4.0
+shader_parameter/cloud_shape_sampler = SubResource("NoiseTexture2D_4m1bu")
+shader_parameter/cloud_noise_sampler = SubResource("NoiseTexture2D_4m1bu")
+shader_parameter/cloud_curves = SubResource("CurveTexture_f30df")
+shader_parameter/high_clouds_density = 0.2
+shader_parameter/high_clouds_sampler = SubResource("NoiseTexture2D_4m1bu")
+shader_parameter/top_color = Color(0.34902, 0.588235, 1, 1)
+shader_parameter/bottom_color = Color(0.644553, 0.769292, 1, 1)
+shader_parameter/sun_scatter = Color(0.298039, 0.298039, 0.298039, 1)
+shader_parameter/astro_tint = Color(0.905882, 0.788235, 0.627451, 1)
+shader_parameter/astro_scale = 9.0
+shader_parameter/astro_intensity = 3.0
+shader_parameter/astro_sampler = SubResource("GradientTexture2D_p4glc")
+shader_parameter/stars_intensity = 0.0
+shader_parameter/shooting_stars_intensity = 0.0
+shader_parameter/shooting_star_tint = null
+
+[sub_resource type="Sky" id="Sky_nua6w"]
+sky_material = SubResource("ShaderMaterial_ed75x")
+
+[sub_resource type="Environment" id="Environment_cmxum"]
+background_mode = 2
+sky = SubResource("Sky_nua6w")
+ambient_light_sky_contribution = 0.1
+ssr_enabled = true
+ssao_enabled = true
+ssil_enabled = true
+glow_enabled = true
+fog_enabled = true
+fog_mode = 1
+fog_density = 1.0
+fog_sky_affect = 0.0
+fog_depth_begin = 50.0
+fog_depth_end = 60.0
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.0
+adjustment_enabled = true
+adjustment_brightness = 0.9
+adjustment_contrast = 1.1
+adjustment_saturation = 0.9
+
+[sub_resource type="FogMaterial" id="FogMaterial_c2tmh"]
+density = 2.0
+emission = Color(0.698039, 0.772549, 0.92549, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ej5ei"]
+albedo_texture = ExtResource("4_yqc5a")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_feqwg"]
+albedo_texture = ExtResource("5_72ipk")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oige1"]
+albedo_texture = ExtResource("6_idp21")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2x84n"]
+albedo_texture = ExtResource("6_idp21")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3w5dl"]
+albedo_texture = ExtResource("7_0bl3a")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rsvyc"]
+albedo_texture = ExtResource("7_nlouq")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_vqrlf"]
+albedo_texture = ExtResource("5_72ipk")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hjwke"]
+albedo_texture = ExtResource("8_ss6vt")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xuhbo"]
+albedo_texture = ExtResource("9_vvk7m")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_g58c8"]
+albedo_texture = ExtResource("9_vvk7m")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gg0q7"]
+albedo_color = Color(1, 0.54902, 0, 1)
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_oay3j"]
+points = PackedVector3Array(1.9935, 0.5, 3.039, 1.9935, -0.5, 3.039, 1.9935, 0.5, -3.039, -1.9935, 0.5, 3.039, -1.9935, -0.5, 3.039, 1.9935, -0.5, -3.039, -1.9935, 0.5, -3.039, -1.9935, -0.5, -3.039)
+
+[sub_resource type="Gradient" id="Gradient_7hbho"]
+colors = PackedColorArray(0, 1, 0, 1, 0, 0.741176, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_sdm1i"]
+noise_type = 3
+fractal_gain = 0.4
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_y0tly"]
+seamless = true
+color_ramp = SubResource("Gradient_7hbho")
+noise = SubResource("FastNoiseLite_sdm1i")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mt16r"]
+albedo_texture = SubResource("NoiseTexture2D_y0tly")
+metallic = 0.5
+uv1_triplanar = true
+
+[sub_resource type="BoxMesh" id="BoxMesh_67mov"]
+size = Vector3(3.987, 1, 6.078)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_u7mb8"]
+size = Vector3(100, 5, 159.393)
+
+[sub_resource type="Animation" id="Animation_sxmsb"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("HUD/ScreenFade:modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_x8dvy"]
+resource_name = "fade_in"
+length = 0.7
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("HUD/ScreenFade:modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.7),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 0), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_rmeji"]
+resource_name = "fade_out"
+length = 0.8
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("HUD/ScreenFade:modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.8),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 1), Color(1, 1, 1, 0)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_2oh3o"]
+_data = {
+"RESET": SubResource("Animation_sxmsb"),
+"fade_in": SubResource("Animation_x8dvy"),
+"fade_out": SubResource("Animation_rmeji")
+}
+
+[node name="World" type="Node3D"]
+script = ExtResource("1_0e1xw")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.978867, -0.0825248, 0.187109, 0, 0.91496, 0.403545, -0.2045, 0.395017, -0.895624, 0, 0, 0)
+shadow_enabled = true
+shadow_opacity = 0.6
+shadow_blur = 1.25
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_cmxum")
+
+[node name="GodotPlush" parent="." instance=ExtResource("2_udnsw")]
+transform = Transform3D(-1.31134e-07, 0, 3, 0, 3, 0, -3, 0, -1.31134e-07, 6.81174, 0.74502, -5.87008)
+
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://Player/player.tscn")
+spawn_path = NodePath("..")
+spawn_limit = 4
+
+[node name="Player" parent="." instance=ExtResource("3_sjtkm")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 2.24087, 0)
+
+[node name="FogVolume1" type="FogVolume" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.1139, -15.8566, -6.38284)
+size = Vector3(70.2278, 24.5381, 65.333)
+material = SubResource("FogMaterial_c2tmh")
+
+[node name="FogVolume2" type="FogVolume" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.93701, -16.2563, -84.519)
+size = Vector3(69.874, 2, 90.3286)
+material = SubResource("FogMaterial_c2tmh")
+
+[node name="Map" type="CSGCombiner3D" parent="."]
+operation = 2
+use_collision = true
+
+[node name="MainPlatform" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.36768, 0)
+use_collision = true
+size = Vector3(20, 5.73535, 20)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Platform1" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.728873, -21.1643)
+use_collision = true
+size = Vector3(8, 1, 8.60535)
+material = SubResource("StandardMaterial3D_feqwg")
+
+[node name="Wall1" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.58051, 0.271127, -21.1643)
+use_collision = true
+size = Vector3(0.838989, 1, 8.60535)
+material = SubResource("StandardMaterial3D_oige1")
+
+[node name="Wall2" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.56676, 0.271127, -21.1643)
+use_collision = true
+size = Vector3(0.838989, 1, 8.60535)
+material = SubResource("StandardMaterial3D_2x84n")
+
+[node name="Platform9" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -4.66106, -82.0392)
+use_collision = true
+size = Vector3(8, 1, 32.9973)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Platform14" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.53188, -107.755)
+use_collision = true
+size = Vector3(10, 1.336, 15.5591)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Roof" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.77791, -110.15)
+use_collision = true
+size = Vector3(10, 0.31302, 8.97805)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall5" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.808189, -114.245)
+use_collision = true
+size = Vector3(10, 3.627, 0.863)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall7" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.808189, -106.067)
+use_collision = true
+size = Vector3(10, 3.627, 0.863)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Door1" type="CSGBox3D" parent="Map"]
+transform = Transform3D(0.2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.316417, -106.067)
+operation = 2
+use_collision = true
+size = Vector3(10, 2.643, 0.9)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall6" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.7156, 0.808189, -110.189)
+use_collision = true
+size = Vector3(0.57251, 3.62737, 8.97292)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Box4" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.98799, -0.371839, -110.189)
+use_collision = true
+size = Vector3(1.10163, 1.26732, 8.97292)
+material = SubResource("StandardMaterial3D_3w5dl")
+
+[node name="Wall8" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.716, 0.808, -110.19)
+use_collision = true
+size = Vector3(0.57251, 3.62737, 8.97292)
+material = SubResource("StandardMaterial3D_rsvyc")
+
+[node name="Door2" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.716, 0.356174, -110.249)
+operation = 2
+use_collision = true
+size = Vector3(0.6, 2.724, 1.661)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall3" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.58051, -3.66106, -82.0334)
+use_collision = true
+size = Vector3(0.838989, 1, 32.9856)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall4" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.56676, -3.66106, -82.0021)
+use_collision = true
+size = Vector3(0.838989, 1, 32.9231)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Platform4" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.0201507, -28.2316)
+use_collision = true
+size = Vector3(8, 1.42096, 4.09435)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Platform5" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0252061, 1.49719, -29.9404)
+use_collision = true
+size = Vector3(8, 0.727081, 1.52041)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Platform2" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.71746, -37.3152)
+use_collision = true
+size = Vector3(8, 1, 13.1608)
+material = SubResource("StandardMaterial3D_vqrlf")
+
+[node name="Platform8" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3.96247, -53.7088)
+use_collision = true
+size = Vector3(12, 1, 15.5791)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Platform11" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23.8815, -1.52269, -109.818)
+use_collision = true
+size = Vector3(19.8325, 1, 15.5791)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Box1" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.06816, -38.9051)
+use_collision = true
+size = Vector3(5, 1.779, 3)
+material = SubResource("StandardMaterial3D_hjwke")
+
+[node name="Box2" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.29879, -73.6016)
+use_collision = true
+size = Vector3(5, 1.04997, 3)
+material = SubResource("StandardMaterial3D_xuhbo")
+
+[node name="Box3" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.29879, -85.6195)
+use_collision = true
+size = Vector3(5, 1.04997, 3)
+material = SubResource("StandardMaterial3D_g58c8")
+
+[node name="Box5" type="CSGBox3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3.29462, -98.3181)
+use_collision = true
+size = Vector3(5, 1.64176, 3.75635)
+material = SubResource("StandardMaterial3D_g58c8")
+
+[node name="CSGSphere3D" type="CSGSphere3D" parent="Map"]
+transform = Transform3D(1, 0, 0, 0, 0.5, 0, 0, 0, 1, 1.87145, -3.75153, -53.5874)
+visible = false
+radius = 1.34
+radial_segments = 32
+rings = 12
+material = SubResource("StandardMaterial3D_gg0q7")
+
+[node name="Platform10" type="CSGBox3D" parent="Map"]
+transform = Transform3D(-0.0170336, 0, 0.999855, 0, 1, 0, -0.999855, 0, -0.0170336, -9.59184, -1.50791, -110.119)
+use_collision = true
+size = Vector3(3, 1, 9.18876)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall9" type="CSGBox3D" parent="Map"]
+transform = Transform3D(-0.0170336, 0, 0.999855, 0, 1, 0, -0.999855, 0, -0.0170336, -9.53389, -0.507907, -108.305)
+use_collision = true
+size = Vector3(0.838989, 1, 9.19444)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall11" type="CSGBox3D" parent="Map"]
+transform = Transform3D(-0.00219915, 0, 0.999998, 0, 1, 0, -0.999998, 0, -0.00219915, -23.8744, -0.507907, -102.408)
+use_collision = true
+size = Vector3(0.838989, 1, 19.8663)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall12" type="CSGBox3D" parent="Map"]
+transform = Transform3D(-0.00219915, 0, 0.999998, 0, 1, 0, -0.999998, 0, -0.00219915, -23.8744, -0.507907, -117.165)
+use_collision = true
+size = Vector3(0.838989, 1, 19.8663)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall13" type="CSGBox3D" parent="Map"]
+transform = Transform3D(-0.999899, 0, 0.0142065, 0, 1, 0, -0.0142065, 0, -0.999899, -33.8027, -0.507907, -109.775)
+use_collision = true
+size = Vector3(0.838989, 1, 15.5759)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall14" type="CSGBox3D" parent="Map"]
+transform = Transform3D(-0.999899, 0, 0.0142065, 0, 1, 0, -0.0142065, 0, -0.999899, -14.3292, -0.507907, -114.547)
+use_collision = true
+size = Vector3(0.838989, 1, 6.03256)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall15" type="CSGBox3D" parent="Map"]
+transform = Transform3D(-0.999899, 0, 0.0142065, 0, 1, 0, -0.0142065, 0, -0.999899, -14.3173, -0.507907, -105.614)
+use_collision = true
+size = Vector3(0.838989, 1, 6.05929)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Wall10" type="CSGBox3D" parent="Map"]
+transform = Transform3D(-0.0170336, 0, 0.999855, 0, 1, 0, -0.999855, 0, -0.0170336, -9.64293, -0.507907, -112.016)
+use_collision = true
+size = Vector3(0.838989, 1, 9.16902)
+material = SubResource("StandardMaterial3D_ej5ei")
+
+[node name="Labels" type="Node3D" parent="."]
+
+[node name="Label3D" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.13404, -37.3948)
+text = "Crouch?"
+font_size = 128
+outline_size = 28
+
+[node name="Label3D10" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.27839, -72.073)
+text = "Try to Roll"
+font_size = 100
+outline_size = 28
+
+[node name="Label3D11" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.27839, -84.1003)
+text = "Now Slide :)"
+font_size = 100
+outline_size = 28
+
+[node name="Label3D13" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.50983, -99.9534)
+text = "Climb Here Again!"
+font_size = 100
+outline_size = 28
+
+[node name="Label3D14" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.32189, -113.783)
+text = "Looks like you reached the end"
+font_size = 82
+outline_size = 28
+
+[node name="Label3D16" type="Label3D" parent="Labels"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 4.39183, 1.32189, -99.3609)
+visible = false
+text = "But forgot picking your cute friend :("
+font_size = 72
+outline_size = 28
+
+[node name="Label3D17" type="Label3D" parent="Labels"]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -4.38077, 2.13503, -110.242)
+text = "Rome freely here"
+font_size = 82
+outline_size = 28
+
+[node name="Label3D15" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.709621, -113.783)
+text = "Thanks for playing :D"
+font_size = 82
+outline_size = 28
+
+[node name="Label3D3" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.56691, 2.7142, -30.6717)
+text = "Ledge Climb feature 
+coming soon!"
+font_size = 42
+outline_size = 16
+
+[node name="Label3D4" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.36237, 2.72158, -30.6717)
+text = "Cimb Here"
+font_size = 82
+outline_size = 20
+
+[node name="Label3D2" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.42179, 1.45624, -8.42353)
+billboard = 2
+text = "Jump + Run"
+font_size = 128
+outline_size = 28
+
+[node name="Label3D12" type="Label3D" parent="Labels"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 7.95849, 1.45624, -5.92959)
+text = "Don`t forgot to pick your friend!"
+font_size = 92
+outline_size = 28
+
+[node name="Label3D7" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.42179, -2.93147, -49.1667)
+billboard = 2
+text = "Hard Land?"
+font_size = 128
+outline_size = 28
+
+[node name="Label3D18" type="Label3D" parent="Labels"]
+transform = Transform3D(0.482686, 0, 0.875793, 0, 1, 0, -0.875793, 0, 0.482686, -3.52317, -2.93147, -52.8272)
+text = "Kill Them!"
+font_size = 128
+outline_size = 28
+
+[node name="Label3D9" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.42901, -2.93147, -59.9282)
+billboard = 2
+text = "Lets Continue!"
+font_size = 128
+outline_size = 28
+
+[node name="Label3D8" type="Label3D" parent="Labels"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 5.16835, -1.22403, -51.7158)
+text = "--- Lets Try Few Features ---
+Try Strafing
+Try to use emotes (1-4)
+Try to lean while running
+Try to hear footsteps
+And More..."
+font_size = 72
+outline_size = 28
+
+[node name="Label3D5" type="Label3D" parent="Labels"]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0.359783, 3.2209, 8.97078)
+text = "Welcome To Advanced Third Person Controller Demo
+(Look Back)"
+font_size = 128
+outline_size = 28
+
+[node name="Label3D6" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.194094, 1.96896, 7.62432)
+visible = false
+billboard = 2
+text = "Please do not mind the animations if it looks odd
+This is my first time I created animations in blender."
+font_size = 82
+outline_size = 28
+
+[node name="Lights" type="Node3D" parent="."]
+
+[node name="SpotLight3D" type="SpotLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 2.56398, -112.673)
+light_energy = 5.0
+spot_range = 6.31713
+spot_angle = 33.1455
+
+[node name="SpotLight3D2" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 3.6239, 2.56398, -113.162)
+light_energy = 5.0
+
+[node name="SpotLight3D3" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 3.6239, 2.56398, -107.378)
+light_energy = 5.0
+
+[node name="SpotLight3D4" type="OmniLight3D" parent="Lights"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -4.09935, 0.439093, -110.264)
+light_energy = 5.0
+
+[node name="GrassArea" type="StaticBody3D" parent="." groups=["Grass"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.454, -3.962, -51.75)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="GrassArea"]
+shape = SubResource("ConvexPolygonShape3D_oay3j")
+
+[node name="Model" type="MeshInstance3D" parent="GrassArea"]
+material_override = SubResource("StandardMaterial3D_mt16r")
+mesh = SubResource("BoxMesh_67mov")
+skeleton = NodePath("../..")
+
+[node name="Enemy" parent="." instance=ExtResource("10_2tw5l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.30818, -2.15431, -53.3511)
+
+[node name="Enemy2" parent="." instance=ExtResource("10_2tw5l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.30818, -2.15431, -55.7152)
+
+[node name="Enemy3" parent="." instance=ExtResource("10_2tw5l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.30818, -2.15431, -58.0928)
+
+[node name="KillZone" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -53.6208)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="KillZone"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.78264, -9.97393, 1.40551)
+shape = SubResource("BoxShape3D_u7mb8")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="ScreenFade" type="ColorRect" parent="HUD"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="HUD"]
+root_node = NodePath("../..")
+libraries = {
+"": SubResource("AnimationLibrary_2oh3o")
+}
+autoplay = "fade_out"
+
+[node name="Controls" type="VBoxContainer" parent="HUD"]
+offset_left = 15.0
+offset_top = 10.0
+offset_right = 191.0
+offset_bottom = 293.0
+
+[node name="Label" type="Label" parent="HUD/Controls"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/line_spacing = -1
+theme_override_constants/outline_size = 5
+theme_override_constants/shadow_outline_size = 5
+theme_override_font_sizes/font_size = 22
+text = "Move - WASD
+Jump - Space
+Sprint - Shift
+Crouch - CTRL
+Emotes - 1, 2, 3, 4
+Interact - F
+Strafe - Right Mouse
+Zoom In/Out - Scroll
+Roll - Shift + C
+Slide - Shift + V
+Attack - Left Mouse"
+
+[connection signal="body_entered" from="KillZone" to="." method="_on_kill_zone_body_entered"]
