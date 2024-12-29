@@ -2,7 +2,7 @@
 
 Thank you for downloading this **Advanced Third-Person Controller**! This controller is designed to offer a wide range of features and flexibility for your game projects. I hope it enhances your development experience and helps you create something amazing.
 
-If you find this Advanced Third-Person Controller useful, consider supporting my work by [buying me a coffee](https://buymeacoffee.com/KingGD). If you don't have an account there, you can also support me through [Ko-fi](https://ko-fi.com/neonfirestudio) or [Itch.io](https://neonfire-studio.itch.io/godot-advanced-third-person-controller). Your support is greatly appreciated and helps me continue to improve and add more features!
+If you find this Advanced Third-Person Controller useful, consider supporting my work by [Ko-fi](https://ko-fi.com/neonfirestudio). If you don't have an account there, you can also support me through [Itch.io](https://neonfire-studio.itch.io/godot-advanced-third-person-controller). Your support is greatly appreciated and helps me continue to improve and add more features!
 
 [Take a look at the development plan for it.](https://github.com/NeonfireStudio/godot-advanced-third-person-controller/blob/main/FuturePlan.md)
 
@@ -76,6 +76,9 @@ HeadYes
 HeadNo
 Waving
 WavingBothHands
+PunchLeft
+PunchRight
+HardLand
 ```
 ### Important Note!
 - Every animation must be in place.
@@ -85,8 +88,9 @@ WavingBothHands
 2. Adjust the size and position of your model as per the default character.
 3. Set the `anim_player` of the **AnimationTree** node to your model's animation player.
 4. In the **Skeleton3D** node of your model, add a **BoneAttachment3D** and name it "HandPalm".
-5. Set the **hand_palm** export variable to reference this "HandPalm" node.
-6. Test your character; it should now be fully integrated and ready for use.
+5. Set the **hand_palm** export variable to reference this "HandPalm" node which is the hand palm bone of your model.
+6. Change the timers in the scene (like RollTimer, PickupTimer, etc.) to work well with the controller.
+7. Test your character; it should now be fully integrated and ready for use.
 
 ## Current Features (v1.0):
 
@@ -110,8 +114,12 @@ WavingBothHands
 
 - Footstep sound may not work in Multiplayer Mode.
 - Picking up object may not work in Multiplayer Mode.
-- There is a small hole in the foot of Godot Robo character.  
+- You can`t get or set player rotation directly by codes, instead you need to use set_player_rotation or get_player_rotation function to do it.  
 ...I will try to fix it in future versions.
+
+## Important Notes
+- You can`t get or set player rotation directly by codes, instead you need to use set_player_rotation or get_player_rotation function to do it [/ul]
+- This template is highly depends on the quality of your chararcter [/ul]
 
 ## Controls
 
@@ -138,9 +146,9 @@ WavingBothHands
 
 **Project Presented By**: [Neonfire Studio](https://neonfire-studio.itch.io)  
 **Project Developed By**: Sandipan Saha  
-**3D Models Created By**: Brandon A. Silva  
+**Godette Model Created By**: [zahlenmaler](https://sketchfab.com/3d-models/godette-rigged-dd05b69799a2438e97c90d166f6e416a)  
+**Godette Model Animated By**: Sandipan Saha  
 **Godot Plush Model By**: [FR3NKD](https://fr3nkd.gumroad.com/l/vhfvy)  
-**Animations From**: [Mixamo](https://www.mixamo.com)  
 **Grid Textures & Sounds From**: [Kenney](https://kenney.nl)
 
 ## Copyright
@@ -151,7 +159,7 @@ Licensed under the [MIT License](https://opensource.org/license/mit):
 - You may not resell this project or any of its components.
 - You may not create YouTube tutorials or other instructional content based on this project without permission.
 
-### 3D Models:
+### 3D Model Animations:
 
 - These models are available for use in non-commercial projects only.
 
