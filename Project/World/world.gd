@@ -66,7 +66,7 @@ func _on_kill_zone_body_entered(body: Node3D) -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	if has_node("GodotPlush") and !$Labels/Label3D16.visible: $Labels/Label3D16.show()
+	$Labels/Label3D16.visible = has_node("GodotPlush")
 	
 	if Input.is_action_just_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
