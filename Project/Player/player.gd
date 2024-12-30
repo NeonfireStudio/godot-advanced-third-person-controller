@@ -6,7 +6,7 @@ class_name Player
 @export var walking_speed : float = 5.0
 @export var running_speed : float = 8.0
 @export var crouching_speed : float = 2.5
-@export var backward_speed_divide_by : float = 1.25
+@export var backward_speed_multiplier : float = 1.25
 @export var sliding_speed : float = 10.0
 @export var jump_force : float = 4.5
 @export_range(0, 35) var walk_lean_amount : float = 5.0
@@ -16,11 +16,11 @@ class_name Player
 @export_range(0.05, 9999) var slide_delay = 0.5
 @export var rolling_duration : float = 1.35 #0.8
 @export var sliding_duration : float = 1.5
-@export var fall_roll_height : float = 10
+@export var fall_action_height : float = 10
 
 # Camera Settings
 @export_group("Camera Settings")
-@export var sensitivity : float = 0.005
+@export var camera_sensitivity : float = 0.005
 @export var min_look_up : float = -90.0
 @export var max_look_up : float = 90.0
 @export var default_fov : float = 75.0
@@ -30,11 +30,12 @@ class_name Player
 # Action Settings
 @export_group("Action Settings")
 @export var can_jump_while_crouched: bool = true
-@export var lerp_speed: float = 10.0
+@export var lean_lerp_speed: float = 10.0
 @export var melee_power: int = 20
 @export var attack_cooldown: float = 1.1
-@export_enum("Roll", "HardLand") var fall_action: String = "HardLand"
+@export_enum("Roll", "HardLand") var fall_action_type: String = "HardLand"
 @export var hard_land_delay: float = 1.2
+@export var pickup_delay: float = 0.2
 
 # Other Settings
 @export_group("Other Settings")
@@ -43,9 +44,8 @@ class_name Player
 # OnReady Variables (Initial setup)
 @onready var model: Node3D = $Model
 
-@onready var collision_shape: CollisionShape3D = $NormalCollision
+@onready var normal_collision: CollisionShape3D = $NormalCollision
 @onready var crouched_collision: CollisionShape3D = $CrouchedCollision
-@onready var sliding_collision: CollisionShape3D = $SlidingCollision
 
 @onready var camera_pivot: SpringArm3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera
@@ -86,9 +86,7 @@ var can_attack : bool = true
 var previous_velocity : Vector3 = Vector3.ZERO  # Previous velocity for movement calculations
 var last_input_dir : Vector2 = Vector2.ZERO # Last input direction for movement
 
-var previous_speed : float = 0.0 # Previous speed
-
-var object : Node3D = null # Object the character is interacting with
+var interacting_object : Node3D = null # Object the character is interacting with
 
 var initial_rotation : float = 0  # Initial character rotation in y-axis
 var combo_count : int = 0 # Combo counter for attacks
@@ -128,10 +126,10 @@ func _input(event: InputEvent) -> void:
 	# Handle mouse motion events
 	if event is InputEventMouseMotion:
 		# Rotate the camera pivot around the Y-axis based on horizontal mouse movement
-		camera_pivot.rotate_y(-event.relative.x * sensitivity)
+		camera_pivot.rotate_y(-event.relative.x * camera_sensitivity)
 	
 		# Adjust the camera pivot's X-axis rotation based on vertical mouse movement
-		camera_pivot.rotation.x += -event.relative.y * sensitivity
+		camera_pivot.rotation.x += -event.relative.y * camera_sensitivity
 	
 		# Clamp the X-axis rotation to ensure it stays within the allowed look-up/down range
 		camera_pivot.rotation.x = clamp(
@@ -161,8 +159,8 @@ func _physics_process(delta: float) -> void:
 	camera.fov = lerpf(camera.fov, zoomed_fov if Input.is_action_pressed("right_mouse") else default_fov, delta*10.0)
 	
 	# Handle landing after a fall
-	if is_on_floor() and previous_velocity.y < -fall_roll_height:
-		if fall_action == "HardLand":
+	if is_on_floor() and previous_velocity.y < -fall_action_height:
+		if fall_action_type == "HardLand":
 			hard_land()
 		else:
 			slide(delta)
@@ -192,14 +190,8 @@ func _physics_process(delta: float) -> void:
 	# Adjust speed and collision shape for crouching or rolling
 	if is_crouching: current_speed = crouching_speed
 	
-	crouched_collision.disabled = !is_crouching
-	sliding_collision.disabled = !is_rolling
-	if !crouched_collision.disabled and is_rolling:
-		crouched_collision.disabled = true
-	elif !sliding_collision.disabled and is_crouching:
-		sliding_collision.disabled = true
-	
-	collision_shape.disabled = is_crouching or is_rolling
+	normal_collision.disabled = is_crouching or is_rolling
+	crouched_collision.disabled = !normal_collision.disabled
 	
 	# Handle rolling or sliding actions
 	if Input.is_action_just_pressed("roll"):
@@ -233,32 +225,34 @@ func _physics_process(delta: float) -> void:
 	
 	if direction:
 		# Adjust velocity based on speed and direction
-		if current_speed >= running_speed-0.1 and (current_speed != sliding_speed and !is_rolling): is_running = true
+		if current_speed >= running_speed-0.1 and (current_speed != sliding_speed and !is_rolling and !is_picking_object): is_running = true
 		if current_speed == walking_speed and velocity.length() > 6.75: is_running = false
-		velocity.x = direction.x * current_speed / (backward_speed_divide_by if input_dir.y == 1 else 1.0)
-		velocity.z = direction.z * current_speed / (backward_speed_divide_by if input_dir.y == 1 else 1.0)
+		velocity.x = direction.x * current_speed / (backward_speed_multiplier if input_dir.y == 1 else 1.0)
+		velocity.z = direction.z * current_speed / (backward_speed_multiplier if input_dir.y == 1 else 1.0)
 		
 		# Reset certain animations
 		set_animation("parameters/EmotesState/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT, delta, -1)
 		set_animation("parameters/JustStop/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT, delta, -1)
+		set_animation("parameters/Attack/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FADE_OUT, delta, -1)
 	else:
 		# Gradually stop velocity when no input
 		velocity.x = move_toward(velocity.x, 0, current_speed)
 		velocity.z = move_toward(velocity.z, 0, current_speed)
 		
 		# Handle emote animations
+		var emote_used = true
 		if Input.is_action_just_pressed("emote_1"):
 			set_animation("parameters/Emotes/transition_request", "Yes", delta, -1)
-			set_animation("parameters/EmotesState/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE, delta, -1)
 		elif Input.is_action_just_pressed("emote_2"):
 			set_animation("parameters/Emotes/transition_request", "No", delta, -1)
-			set_animation("parameters/EmotesState/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE, delta, -1)
 		elif Input.is_action_just_pressed("emote_3"):
 			set_animation("parameters/Emotes/transition_request", "Wave", delta, -1)
-			set_animation("parameters/EmotesState/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE, delta, -1)
 		elif Input.is_action_just_pressed("emote_4"):
 			set_animation("parameters/Emotes/transition_request", "WaveBH", delta, -1)
-			set_animation("parameters/EmotesState/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE, delta, -1)
+		else:
+			emote_used = false
+		
+		if emote_used: set_animation("parameters/EmotesState/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE, delta, -1)
 		
 		# Play just stop animation when character stops after running
 		if is_running:
@@ -284,21 +278,21 @@ func _physics_process(delta: float) -> void:
 		if velocity.y > 0: velocity.y = 0
 		velocity.z = 0
 		
-		if object != null: object.position = lerp(object.position, Vector3.ZERO, delta*10.0)
+		if interacting_object != null: interacting_object.position = lerp(interacting_object.position, Vector3.ZERO, delta*10.0)
 	
 	# Apply movement
 	move_and_slide()
 	
 	# Handle model lean while moving
 	if input_dir and !is_strafing and !is_crouching and !is_picking_object:
-		model.rotation.z = lerp_angle(model.rotation.z, atan2(-velocity.x, -velocity.z) - model.rotation.y, delta*lerp_speed)
+		model.rotation.z = lerp_angle(model.rotation.z, atan2(-velocity.x, -velocity.z) - model.rotation.y, delta*lean_lerp_speed)
 		
 		if Input.is_action_pressed("sprint"):
 			model.rotation.z = clampf(model.rotation.z, deg_to_rad(-run_lean_amount), deg_to_rad(run_lean_amount))
 		else:
 			model.rotation.z = clampf(model.rotation.z, deg_to_rad(-walk_lean_amount), deg_to_rad(walk_lean_amount))
 	else:
-		model.rotation.z = lerp_angle(model.rotation.z, 0.0, delta*lerp_speed)
+		model.rotation.z = lerp_angle(model.rotation.z, 0.0, delta*lean_lerp_speed)
 	
 	# Update animation blend positions
 	var blend = input_dir.normalized()
@@ -346,14 +340,14 @@ func _physics_process(delta: float) -> void:
 				pickup_timer.start()
 				set_animation("parameters/PickObject/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE, delta, -1)
 				body.disabled_collisions()
-				await get_tree().create_timer(0.2).timeout
+				await get_tree().create_timer(pickup_delay).timeout
 				body.reparent(hand_attachment)
-				object = body
+				interacting_object = body
 				break
 	
 	# Adjust the footstep sound pitch based on the current speed and whether strafing is happening
 	if is_strafing and current_speed == walking_speed:
-		footstep_sound.pitch_scale = 0.3
+		footstep_sound.pitch_scale = 0.25
 	else:
 		match current_speed:
 			walking_speed:
@@ -451,8 +445,8 @@ func _on_pickup_timer_timeout() -> void:
 	is_picking_object = false
 	
 	# Free the object and reset reference
-	object.queue_free()
-	object = null #... Just be sure
+	interacting_object.queue_free()
+	interacting_object = null #...Just be sure
 
 
 # Handles the character sliding action
@@ -499,7 +493,7 @@ func trigger_attack() -> void:
 			var body = enemy_detector.get_collider(i)
 			
 			# If the collider is an enemy, apply damage
-			if body != null: if body.is_in_group("Enemy"): body.take_damage(20)
+			if body != null: if body.is_in_group("Enemy"): body.take_damage(melee_power)
 
 
 # Returns the player's rotation
