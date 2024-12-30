@@ -14,6 +14,8 @@ class_name Player
 @export var single_slide_type : bool = false
 @export_enum("Roll", "Slide") var slide_type = "Roll"
 @export_range(0.05, 9999) var slide_delay = 0.5
+@export var rolling_duration : float = 1.35 #0.8
+@export var sliding_duration : float = 1.5
 @export var fall_roll_height : float = 10
 
 # Camera Settings
@@ -60,7 +62,7 @@ class_name Player
 
 @onready var enemy_detector: ShapeCast3D = $EnemyDetector
 
-@onready var roll_timer: Timer = $RollTimer
+@onready var sliding_timer: Timer = $SlidingTimer
 @onready var pickup_timer: Timer = $PickupTimer
 @onready var combo_timer: Timer = $ComboTimer
 
@@ -143,7 +145,7 @@ func _physics_process(delta: float) -> void:
 	if not is_multiplayer_authority() and Global.multiplayer_type != "None": return
 	
 	# Handle menu return action
-	if Input.is_action_just_pressed("ui_cancel"):
+	if Input.is_action_just_pressed("ui_text_completion_replace"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		#get_tree().change_scene_to_file("res://Menu/menu.tscn")
 		return
@@ -432,7 +434,7 @@ func set_animation(path, value, delta, lerp_type) -> void:
 
 
 # Called when the roll timer times out (ends)
-func _on_roll_timer_timeout() -> void:
+func _on_sliding_timer_timeout() -> void:
 	is_rolling = false
 	
 	# Check if the character is colliding with a roof, then crouch
@@ -466,7 +468,8 @@ func slide(delta: float) -> void:
 	set_animation("parameters/GroundState/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE, delta, -1)
 	
 	# Start the roll timer
-	roll_timer.start()
+	sliding_timer.wait_time = sliding_duration if slide_type == "Slide" else rolling_duration
+	sliding_timer.start()
 
 
 # Initiates the character's attack
