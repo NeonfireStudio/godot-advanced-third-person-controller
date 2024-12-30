@@ -30,6 +30,8 @@ If you find this Advanced Third-Person Controller useful, consider supporting my
     scroll_up -> Mouse Wheel Up
     scroll_Dowm -> Mouse Wheel Down
     fullscreen -> F11
+    tab -> Show Cursor
+    ESC -> Return to Menu
     ```
 4. Add the player to your scene
 5. Run and test your game, it is ready!
@@ -67,9 +69,9 @@ RunToStop
 JogLeft
 JogRight
 JogForward
-JogBackward
-JogBackLeft
-JogBackRight
+JogBackward (Optional)
+JogBackLeft (Optional)
+JogBackRight (Optional)
 JogForwardLeft
 JogForwardRight
 HeadYes
@@ -80,8 +82,9 @@ PunchLeft
 PunchRight
 HardLand
 ```
-### Important Note!
+### Important Notes on Animations!
 - Every animation must be in place.
+- You can change the animations in the animation tree if the name not matches with you chararcter model.
 ### Steps
 
 1. Add your character model to the project and make it local.
