@@ -65,5 +65,10 @@ func _on_kill_zone_body_entered(body: Node3D) -> void:
 		$HUD/AnimationPlayer.play("fade_out")
 
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if has_node("GodotPlush") and !$Labels/Label3D16.visible: $Labels/Label3D16.show()
+	
+	if Input.is_action_just_pressed("ui_cancel"):
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		get_tree().change_scene_to_file("res://Menu/menu.tscn")
+
